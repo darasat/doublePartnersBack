@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using doublePartnersBack.db;
 using doublePartnersBack.Models;
+using Microsoft.Extensions.Logging;
 
 namespace doublePartnersBack.Controllers
 {
@@ -13,69 +14,98 @@ namespace doublePartnersBack.Controllers
     public class WishListProductsController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly ILogger<WishListProductsController> _logger;
 
-        public WishListProductsController(AppDbContext context)
+        public WishListProductsController(AppDbContext context, ILogger<WishListProductsController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         // Consultar listado de productos deseados de un usuario
         [HttpGet("{userId}")]
         public async Task<ActionResult<IEnumerable<Producto>>> GetWishListByUser(string userId)
         {
-            var wishList = await _context.WishlistItems
-                .Where(w => w.UserId == userId) // Comparación correcta con string
-                .Include(w => w.Producto) // Incluir los detalles del producto
-                .Select(w => w.Producto) // Solo seleccionar el producto
-                .ToListAsync();
-
-            if (wishList == null || !wishList.Any())
+            try
             {
-                return NotFound("No se encontraron productos deseados para este usuario.");
-            }
+                var wishList = await _context.WishlistItems
+                    .Where(w => w.UserId == userId)
+                    .Include(w => w.Producto)
+                    .Select(w => w.Producto)
+                    .ToListAsync();
 
-            return Ok(wishList);
+                if (wishList == null || !wishList.Any())
+                {
+                    _logger.LogWarning("No se encontraron productos deseados para el usuario con ID: {UserId}", userId);
+                    return NotFound("No se encontraron productos deseados para este usuario.");
+                }
+
+                return Ok(wishList);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al obtener la lista de productos deseados para el usuario con ID: {UserId}", userId);
+                return StatusCode(500, "Se produjo un error en el servidor.");
+            }
         }
 
         // Agregar un producto como "producto deseado"
         [HttpPost]
         public async Task<ActionResult<WishlistItem>> AddProductoToWishList(string userId, int productoId)
         {
-            var producto = await _context.Productos.FindAsync(productoId);
-            if (producto == null)
+            try
             {
-                return NotFound("Producto no encontrado.");
+                var producto = await _context.Productos.FindAsync(productoId);
+                if (producto == null)
+                {
+                    _logger.LogWarning("Producto no encontrado con ID: {ProductoId}", productoId);
+                    return NotFound("Producto no encontrado.");
+                }
+
+                var wishListProduct = new WishlistItem
+                {
+                    UserId = userId,
+                    ProductoId = productoId,
+                    Producto = producto
+                };
+
+                _context.WishlistItems.Add(wishListProduct);
+                await _context.SaveChangesAsync();
+
+                return CreatedAtAction(nameof(GetWishListByUser), new { userId = userId }, wishListProduct);
             }
-
-            var wishListProduct = new WishlistItem
+            catch (Exception ex)
             {
-                UserId = userId,
-                ProductoId = productoId,
-                Producto = producto
-            };
-
-            _context.WishlistItems.Add(wishListProduct);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetWishListByUser), new { userId = userId }, wishListProduct);
+                _logger.LogError(ex, "Error al agregar el producto a la lista de deseos del usuario con ID: {UserId}", userId);
+                return StatusCode(500, "Se produjo un error en el servidor.");
+            }
         }
 
         // Eliminar un producto deseado
         [HttpDelete("{userId}/{productoId}")]
         public async Task<IActionResult> RemoveProductoFromWishList(string userId, int productoId)
         {
-            var wishListProduct = await _context.WishlistItems
-                .FirstOrDefaultAsync(w => w.UserId == userId && w.ProductoId == productoId); // Comparación correcta con string
-
-            if (wishListProduct == null)
+            try
             {
-                return NotFound("El producto deseado no fue encontrado.");
+                var wishListProduct = await _context.WishlistItems
+                    .FirstOrDefaultAsync(w => w.UserId == userId && w.ProductoId == productoId);
+
+                if (wishListProduct == null)
+                {
+                    _logger.LogWarning("El producto deseado no fue encontrado para el usuario con ID: {UserId} y producto con ID: {ProductoId}", userId, productoId);
+                    return NotFound("El producto deseado no fue encontrado.");
+                }
+
+                _context.WishlistItems.Remove(wishListProduct);
+                await _context.SaveChangesAsync();
+
+                return NoContent();
             }
-
-            _context.WishlistItems.Remove(wishListProduct);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al eliminar el producto de la lista de deseos del usuario con ID: {UserId} y producto con ID: {ProductoId}", userId, productoId);
+                return StatusCode(500, "Se produjo un error en el servidor.");
+            }
         }
     }
 }
