@@ -88,6 +88,19 @@ namespace doublePartnersBack.Controllers
             return NoContent(); // Se devuelve NoContent cuando la eliminación fue exitosa
         }
 
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Producto>> GetProductoById(int id)
+        {
+            var producto = await _context.Productos.FindAsync(id);
+
+            if (producto == null)
+            {
+                return NotFound(); // Si no se encuentra el producto, devolvemos un 404
+            }
+
+            return producto; // Devolvemos el producto encontrado (detalle del producto)
+        }
+
 
 
     }
