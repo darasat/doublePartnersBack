@@ -2,6 +2,7 @@
 using doublePartnersBack.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace doublePartnersBack.Controllers
 {
@@ -31,6 +32,63 @@ namespace doublePartnersBack.Controllers
             await _context.SaveChangesAsync();
             return CreatedAtAction(nameof(GetProductos), new { id = producto.Id }, producto);
         }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateProducto(int id, Producto producto)
+        {
+            if (id != producto.Id)
+            {
+                return BadRequest(); // El id de la URL y el id del cuerpo de la solicitud no coinciden
+            }
+
+            var existingProducto = await _context.Productos.FindAsync(id);
+            if (existingProducto == null)
+            {
+                return NotFound();
+            }
+
+            // Actualizar propiedades del producto existente con los datos proporcionados
+            existingProducto.Title = producto.Title;
+            // Si hay más propiedades, puedes actualizarlas aquí
+
+            _context.Entry(existingProducto).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!_context.Productos.Any(p => p.Id == id))
+                {
+                    return NotFound();
+                }
+                else
+                {
+                    throw;
+                }
+            }
+
+            return NoContent(); // La actualización fue exitosa, pero no devolvemos contenido
+        }
+
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteProducto(int id)
+        {
+            var producto = await _context.Productos.FindAsync(id);
+            if (producto == null)
+            {
+                return NotFound();
+            }
+
+            _context.Productos.Remove(producto);
+            await _context.SaveChangesAsync();
+
+            return NoContent(); // Se devuelve NoContent cuando la eliminación fue exitosa
+        }
+
+
 
     }
 }
