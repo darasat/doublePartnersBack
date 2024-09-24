@@ -1,0 +1,6 @@
+@doublePartnersBack_HostAddress = http://localhost:5236
+
+GET {{doublePartnersBack_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
